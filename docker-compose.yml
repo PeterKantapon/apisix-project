@@ -1,0 +1,146 @@
+version: '3.8'
+
+services:
+  # etcd for APISIX configuration storage
+  etcd:
+    image: bitnami/etcd:3.5.9
+    container_name: etcd
+    environment:
+      - ALLOW_NONE_AUTHENTICATION=yes
+      - ETCD_ADVERTISE_CLIENT_URLS=http://0.0.0.0:2379
+    ports:
+      - "2379:2379"
+      - "2380:2380"
+    networks:
+      - apisix-network
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Apache APISIX API Gateway
+  apisix:
+    image: apache/apisix:3.6.0-debian
+    container_name: apisix
+    restart: always
+    volumes:
+      - ./apisix/standalone.yaml:/usr/local/apisix/conf/apisix.yaml:ro
+    ports:
+      - "9080:9080"
+      - "9093:9093"
+      - "9443:9443"
+    networks:
+      - apisix-network
+    environment:
+      - APISIX_STAND_ALONE=true
+
+  # MariaDB Database
+  mariadb:
+    image: mariadb:10.11
+    container_name: mariadb
+    restart: always
+    environment:
+      - MYSQL_ROOT_PASSWORD=rootpassword
+      - MYSQL_DATABASE=gofiber_db
+      - MYSQL_USER=gofiber_user
+      - MYSQL_PASSWORD=gofiber_password
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "3306:3306"
+    networks:
+      - apisix-network
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # GoFiber Backend
+  gofiber-backend:
+    build:
+      context: ./gofiber-backend
+      dockerfile: Dockerfile
+    container_name: gofiber-backend
+    restart: always
+    environment:
+      - DB_HOST=mariadb
+      - DB_PORT=3306
+      - DB_USER=gofiber_user
+      - DB_PASSWORD=gofiber_password
+      - DB_NAME=gofiber_db
+      - PORT=8080
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    networks:
+      - apisix-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # WordPress API Provider
+  wordpress-db:
+    image: mysql:8.0
+    container_name: wordpress-db
+    restart: always
+    environment:
+      - MYSQL_DATABASE=wordpress
+      - MYSQL_USER=wordpress
+      - MYSQL_PASSWORD=wordpress
+      - MYSQL_ROOT_PASSWORD=rootpassword
+    volumes:
+      - wordpress_db_data:/var/lib/mysql
+    networks:
+      - apisix-network
+
+  wordpress:
+    image: wordpress:latest
+    container_name: wordpress
+    restart: always
+    environment:
+      - WORDPRESS_DB_HOST=wordpress-db
+      - WORDPRESS_DB_USER=wordpress
+      - WORDPRESS_DB_PASSWORD=wordpress
+      - WORDPRESS_DB_NAME=wordpress
+    volumes:
+      - wordpress_data:/var/www/html
+      - ./wordpress/wp-config-extra.php:/var/www/html/wp-config-extra.php
+    ports:
+      - "8081:80"
+    depends_on:
+      - wordpress-db
+    networks:
+      - apisix-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/wp-admin/admin-ajax.php"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # React Dashboard
+  react-dashboard:
+    build:
+      context: ./react-dashboard
+      dockerfile: Dockerfile
+    container_name: react-dashboard
+    restart: always
+    ports:
+      - "3000:3000"
+    networks:
+      - apisix-network
+
+volumes:
+  mariadb_data:
+  wordpress_data:
+  wordpress_db_data:
+
+networks:
+  apisix-network:
+    driver: bridge

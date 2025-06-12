@@ -1,0 +1,37 @@
+# apisix/config.yaml
+apisix:
+  node_listen: 9080
+  enable_ipv6: false
+  enable_control: true
+  control:
+    ip: "0.0.0.0"
+    port: 9092
+
+deployment:
+  role: traditional
+  role_traditional:
+    config_provider: etcd
+  admin:
+    admin_key:
+      - name: admin
+        key: edd1c9f034335f136f87ad84b625c8f1
+        role: admin
+    enable_admin_cors: true
+    admin_listen:
+      ip: 0.0.0.0
+      port: 9093
+    https_admin: false
+
+etcd:
+  host:
+    - "http://etcd:2379"
+  prefix: "/apisix"
+  timeout: 60
+  startup_retry: 10
+  resync_delay: 5
+
+nginx_config:
+  error_log: "/dev/stderr"
+  error_log_level: "warn"
+  worker_processes: auto
+  enable_reuseport: true

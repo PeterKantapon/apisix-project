@@ -14,7 +14,8 @@ function App() {
     setApiResults(prev => ({ ...prev, loading: true, error: null }));
     
     try {
-      const response = await fetch(`http://localhost:9080${endpoint}`, {
+      // Use relative URL to avoid CORS (proxy through nginx)
+      const response = await fetch(endpoint, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -44,7 +45,8 @@ function App() {
     setApiResults(prev => ({ ...prev, loading: true, error: null }));
     
     try {
-      const response = await fetch('http://localhost:9080/api/data', {
+      // Use relative URL to avoid CORS (proxy through nginx)
+      const response = await fetch('/api/data', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
